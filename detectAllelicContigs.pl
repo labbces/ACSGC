@@ -4,6 +4,18 @@ use strict;
 use warnings;
 use Getopt::Long;
 use File::Basename;
+#######################################
+#######################################
+#######################################
+###### REQUIREMENTS ###################
+### - gffread
+### - cd-hit
+#
+## Make sure these programs are
+##  installed and in your PATH
+#######################################
+#######################################
+#######################################
 
 #######################################
 ##Vars to control data input from user
@@ -15,6 +27,8 @@ my $genomeFile='';
 my $help='';
 my $license='';
 my $cdhitIdentity='';
+my $mpsg='';
+my $mngc='';
 my $version='1.2.0';
 
 #######################################
@@ -32,9 +46,11 @@ my %contigs2clusters;
 ############################################
 
 GetOptions ("gff|g=s"        => \$gffFile,
-            "cluster|c:s"    => \$clstrFile,
-            "protIdent:f"    => \$cdhitIdentity,
+            "cluster|c=s"    => \$clstrFile,
+            "protIdent=f"    => \$cdhitIdentity,
             "genome|g=s"     => \$genomeFile,
+            "mpsg=i"         => \$mpsg,
+            "mngc=i"         => \$mngc,
             "help|h|?"       => \$help, 
             "debug|d=i"      => \$debug,
             "license|l"      => \$license)
@@ -65,6 +81,14 @@ if(!-s $genomeFile){
 # &usage;
 # exit 0;
 #}
+if(!$mpsg){
+ print STDERR "WARNING: You did not especified a Minimum Percentage of Shared Genes (--mpsg) between contigs. This should be a number between 1 and 100. We are using 50% as default.\n\n";
+ $mpsg=50;
+}
+if(!$mngc){
+ print STDERR "WARNING: You did not especified a Minimum Number of Genes annotated in Contigs (--mngc). This could be any integer. Only contigs with this as many genes will be analysed. We are using 10 as default.\n\n";
+ $mngc=10;
+}
 if(!$clstrFile && !$cdhitIdentity){
  print STDERR "\n\tFATAL: You must either provide a cluster file file with results from runing cd-hit, or provide a protein identity threshold and we will run CD-hit for you\n\n";
 }
@@ -82,10 +106,12 @@ if($cdhitIdentity){
 
 parseCDHIT($clstrFile);
 parseAnnotation($gffFile);
-###Requirements
-#CD-HIT
-#gffread
 
+###################################
+# Getting clusters in contigs 
+#  and
+#  contigs with clusters
+###################################
 foreach my $cluster(keys %clusters2transcripts){
  foreach my $seqID(keys(%{$clusters2transcripts{$cluster}})){
   $clusters2contigs{$cluster}{$genes2contigs{$seqID}}=1;
@@ -93,16 +119,23 @@ foreach my $cluster(keys %clusters2transcripts){
  }  
 }
 
+###################################
+# We are only interested in contigs
+#  that have clusters (i.e., genes)
+#  that are shared
+#  with at least one other contig
+###################################
 my %selectedContigs;
 foreach my $cluster(keys %clusters2contigs){
  if(keys(%{$clusters2contigs{$cluster}}) > 1){
   foreach my $contig(keys(%{$clusters2contigs{$cluster}})){
-   $selectedContigs{$contig}=1;
+    $selectedContigs{$contig}=1;
   }
  }
 }
 
 print STDERR "There are ". scalar(keys(%selectedContigs))." contigs with shared gene/protein clusters\n";
+print STDERR "Using $mpsg as the minimum percentage of shared genes between contigs, so that contigs are kepth in the results\n\n";
 foreach my $contig1(keys %selectedContigs){
 # my @clustersContigs1=keys %{$contigs2clusters{$contig1}};
  my @clustersContigs1=keys %{$contigs2clusters{$contig1}};
@@ -119,8 +152,9 @@ foreach my $contig1(keys %selectedContigs){
   }
   my $fractionSharedContig1=($countShared*100)/scalar(keys(%{$contigs2clusters{$contig1}}));
   my $fractionSharedContig2=($countShared*100)/scalar(keys(%{$contigs2clusters{$contig2}}));
-  #Selecting pairs of contigs if at least one of the contigs shares 50% of their genes with the other contig
-  if(($fractionSharedContig1 >=50 || $fractionSharedContig2 >=50) && (@clustersContigs1 > 10 && @clustersContigs2 > 10)){
+  #Selecting pairs of contigs if at least one of the contigs shares at least $mpsg of their genes with the other contig
+  #Also, only contigs with at least $mngc annotated genes are kept
+  if(($fractionSharedContig1 >=$mpsg || $fractionSharedContig2 >=$mpsg) && (@clustersContigs1 >= $mngc && @clustersContigs2 >= $mngc)){
    print "$contig1\t".scalar(keys(%{$contigs2clusters{$contig1}}))."\t$contig2\t".scalar(keys(%{$contigs2clusters{$contig2}}))."\t$countShared\t$fractionSharedContig1\t$fractionSharedContig2\n";
   }
  }
