@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 use Getopt::Long;
+use File::Basename;
+
 
 my $debug=0;
 my $clstrFile='';
@@ -10,18 +12,20 @@ my $gffFile='';
 my $genomeFile='';
 my $help='';
 my $license='';
-my $version='1.0.0';
+my $cdhitIdentity='';
+my $version='1.1.0';
 
 ############################################
 ##Get input from user
 ############################################
 
-GetOptions ("gff|g=s"    => \$gffFile,
-            "cluster|c=s"=> \$clstrFile,
-            "genome|g=s" => \$genomeFile,
-            "help|h|?"   => \$help, 
-            "debug|d=i"  => \$debug,
-            "license|l"  => \$license)
+GetOptions ("gff|g=s"        => \$gffFile,
+            "cluster|c:s"    => \$clstrFile,
+            "protIdent:f"    => \$cdhitIdentity,
+            "genome|g=s"     => \$genomeFile,
+            "help|h|?"       => \$help, 
+            "debug|d=i"      => \$debug,
+            "license|l"      => \$license)
 or die("Error in command line arguments\n");
 ############################################
 ##Check input from user
@@ -44,17 +48,32 @@ if(!-s $genomeFile){
  &usage;
  exit 0;
 }
-if(!$clstrFile){
- print STDERR "\n\tFATAL: You must provide the name of a file to store the results of running CD-hit on the predicted sets of proteins in your genome\n\n";
+#if(!$clstrFile){
+ #print STDERR "\n\tFATAL: You must provide the name of a file storing the results of running CD-hit on the predicted sets of proteins in your genome. We can run CD-hit for you if you do not have this file, with default identity set at 90%\n\n";
+# &usage;
+# exit 0;
+#}
+if(!$clstrFile && !$cdhitIdentity){
+ print STDERR "\n\tFATAL: You must either provide a cluster file file with results from runing cd-hit, or provide a protein identity threshold and we will run CD-hit for you\n\n";
+}
+if($clstrFile && $cdhitIdentity){
+ print STDERR "\n\tFATAL: You are using both options --cluster and --protIdent, you MUST use only one.\n\n";
+}
+if($clstrFile && !-s $clstrFile){
+ print STDERR "\n\tFATAL:  You must provide a cluster file file with results from runing cd-hit on you predicted proteins.\n\n";
  &usage;
  exit 0;
+}
+if($cdhitIdentity){
+ $clstrFile=runCDHIT($genomeFile,$gffFile);
 }
 
 
 
-#use like:
-#./detectAllelicContigs.pl ../braker/augustus.hints.gff augustus.hints.nr90.aa.clstr
-#
+###Requirements
+#CD-HIT
+#gffread
+
 
 my %genes2contigs;
 my %contigs2genes;
@@ -135,7 +154,51 @@ foreach my $contig1(keys %selectedContigs){
 }
 
 
+############################################
+##Run CD-HIT on protein file at a user specific identity threshold.
+#Using 90% identity as default
+############################################
+sub runCDHIT{
+ my $genome=shift;
+ my $gff=shift;
+ my $protFile=getProteins($genome,$gff,$clstrFile) or die "cannot generate protein file";
+ my $protNRfile=$protFile;
+ $protNRfile=~s/\.pep\.faa$/.nr_$cdhitIdentity.faa/;
+ system("cd-hit -M 0 -d 0 -c $cdhitIdentity -i $protFile -o $protNRfile -g 1 > cd-hit.log");
+ my $clstrFile=$protNRfile.'.clstr';
+ return $clstrFile;
+}
 
+############################################
+##Get predicted proteins, using GFFFile and GenomeFile
+############################################
+sub getProteins{
+ my $genome=shift;
+ my $gff=shift;
+ my $protFile=basename($genome);
+ $protFile=~s/.(fasta|fa|fna)/.pep.faa/;
+ my $tempProtFile=$protFile.'.temp';
+ system("gffread $gff -g $genome -y $tempProtFile");
+ open PROTS, ">$protFile";
+ open TEMPPROTS, $tempProtFile;
+ while(<TEMPPROTS>){
+  chomp;
+  if(/^>/){
+   print PROTS $_."\n";
+  }
+  else{
+   s/\.+$//;
+   s/\*$//;
+   s/\*/X/g;
+   s/\./X/g;
+   print PROTS uc($_)."\n";
+  }
+ }
+ close TEMPPROTS;
+ close PROTS;
+ unlink $tempProtFile;
+ return $protFile;
+}
 
 ############################################
 #Usage
