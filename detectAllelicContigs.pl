@@ -2,6 +2,55 @@
 
 use strict;
 use warnings;
+use Getopt::Long;
+
+my $debug=0;
+my $clstrFile='';
+my $gffFile='';
+my $genomeFile='';
+my $help='';
+my $license='';
+my $version='1.0.0';
+
+############################################
+##Get input from user
+############################################
+
+GetOptions ("gff|g=s"    => \$gffFile,
+            "cluster|c=s"=> \$clstrFile,
+            "genome|g=s" => \$genomeFile,
+            "help|h|?"   => \$help, 
+            "debug|d=i"  => \$debug,
+            "license|l"  => \$license)
+or die("Error in command line arguments\n");
+############################################
+##Check input from user
+############################################
+if($help){
+ &usage;
+ exit 1
+}
+if($license){
+ &license;
+ exit 1
+}
+if(!-s $gffFile){
+ print STDERR "\n\tFATAL:  You must provide a GFF file with you genome annotation.\n\n";
+ &usage;
+ exit 0;
+}
+if(!-s $genomeFile){
+ print STDERR "\n\tFATAL:  You must provide a GENOME file in fasta format. Make sure that the contigs/scaffold/chromosome identifiers match with those in your GFF file.\n\n";
+ &usage;
+ exit 0;
+}
+if(!$clstrFile){
+ print STDERR "\n\tFATAL: You must provide the name of a file to store the results of running CD-hit on the predicted sets of proteins in your genome\n\n";
+ &usage;
+ exit 0;
+}
+
+
 
 #use like:
 #./detectAllelicContigs.pl ../braker/augustus.hints.gff augustus.hints.nr90.aa.clstr
@@ -14,7 +63,7 @@ my %clusters2transcripts;
 my %clusters2contigs;
 my %contigs2clusters;
 
-open GFF, $ARGV[0];
+open GFF, $gffFile;
 while(<GFF>){
  chomp;
  next if /^#/;
@@ -26,7 +75,7 @@ while(<GFF>){
 }
 close GFF;
 
-open CDHIT, $ARGV[1];
+open CDHIT, $clstrFile;
 my $clusterId='';
 while(<CDHIT>){
  chomp;
@@ -84,3 +133,54 @@ foreach my $contig1(keys %selectedContigs){
   }
  }
 }
+
+
+
+
+############################################
+#Usage
+############################################
+sub usage{
+    print STDERR "$0 version $version, Copyright (C) 2015 Diego Mauricio Riano Pachon\n";
+    print STDERR "$0 comes with ABSOLUTELY NO WARRANTY; for details type `$0 -l'.\n";
+    print STDERR "This is free software, and you are welcome to redistribute it under certain conditions;\n";
+    print STDERR "type `$0 -l' for details.\n";
+    print STDERR <<EOF;
+NAME
+    $0 Detects putative pairs of allelic contigs based on shared gene content.
+
+USAGE
+    $0 --gff genome.gff3 --genome genome.fasta --cluster predicted_proteins.clstr
+
+OPTIONS
+    --help      -h    This help.
+    --license   -l    License.
+
+EOF
+}
+############################################
+#License
+############################################
+sub license{
+    print STDERR <<EOF;
+
+Copyright (C) 2020 Diego Mauricio Riaño Pach<C3>
+e-mail: diego.riano\@cena.usp.br
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+EOF
+exit;
+}
+
