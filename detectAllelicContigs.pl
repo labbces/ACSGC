@@ -5,7 +5,9 @@ use warnings;
 use Getopt::Long;
 use File::Basename;
 
-
+#######################################
+##Vars to control data input from user
+#######################################
 my $debug=0;
 my $clstrFile='';
 my $gffFile='';
@@ -13,7 +15,17 @@ my $genomeFile='';
 my $help='';
 my $license='';
 my $cdhitIdentity='';
-my $version='1.1.0';
+my $version='1.2.0';
+
+#######################################
+##Vars to control data processing
+#######################################
+my %genes2contigs;
+my %contigs2genes;
+my %transcripts2clusters;
+my %clusters2transcripts;
+my %clusters2contigs;
+my %contigs2clusters;
 
 ############################################
 ##Get input from user
@@ -68,50 +80,11 @@ if($cdhitIdentity){
  $clstrFile=runCDHIT($genomeFile,$gffFile);
 }
 
-
-
+parseCDHIT($clstrFile);
+parseAnnotation($gffFile);
 ###Requirements
 #CD-HIT
 #gffread
-
-
-my %genes2contigs;
-my %contigs2genes;
-my %transcripts2clusters;
-my %clusters2transcripts;
-my %clusters2contigs;
-my %contigs2clusters;
-
-open GFF, $gffFile;
-while(<GFF>){
- chomp;
- next if /^#/;
- my @fields=split("\t");
- if ($fields[2] eq 'transcript'){
-  $genes2contigs{$fields[8]}=$fields[0];
-  $contigs2genes{$fields[0]}{$fields[8]}=1;
- }
-}
-close GFF;
-
-open CDHIT, $clstrFile;
-my $clusterId='';
-while(<CDHIT>){
- chomp;
- if (/^>Cluster (\d+)$/){
-  $clusterId='cluster_'.$1;
- }
- else{
-  my @f1=split(/,/);
-  my @f2=split(/ /,$f1[1]);
-  my $seqId=$f2[1];
-  $seqId=~s/^>//;
-  $seqId=~s/\.+$//;
-  $transcripts2clusters{$seqId}=$clusterId;
-  $clusters2transcripts{$clusterId}{$seqId}=1;
- }
-}
-close CDHIT;
 
 foreach my $cluster(keys %clusters2transcripts){
  foreach my $seqID(keys(%{$clusters2transcripts{$cluster}})){
@@ -153,6 +126,48 @@ foreach my $contig1(keys %selectedContigs){
  }
 }
 
+############################################
+##Parse GTF file
+##############################################
+sub parseAnnotation{
+ my $annotFile=shift;
+ open ANNOT, $annotFile;
+ while(<ANNOT>){
+  chomp;
+  next if /^#/;
+  my @fields=split("\t");
+  if ($fields[2] eq 'transcript'){
+   $genes2contigs{$fields[8]}=$fields[0];
+   $contigs2genes{$fields[0]}{$fields[8]}=1;
+  }
+ }
+ close ANNOT;
+}
+############################################
+#Parse CD-HIT clsuter file and generate hashes
+# to use later
+#############################################
+sub parseCDHIT{
+ my $clusterFile=shift;
+ open CDHIT, $clusterFile;
+ my $clusterId='';
+ while(<CDHIT>){
+  chomp;
+  if (/^>Cluster (\d+)$/){
+   $clusterId='cluster_'.$1;
+  }
+  else{
+   my @f1=split(/,/);
+   my @f2=split(/ /,$f1[1]);
+   my $seqId=$f2[1];
+   $seqId=~s/^>//;
+   $seqId=~s/\.+$//;
+   $transcripts2clusters{$seqId}=$clusterId;
+   $clusters2transcripts{$clusterId}{$seqId}=1;
+  }
+ }
+ close CDHIT;
+}
 
 ############################################
 ##Run CD-HIT on protein file at a user specific identity threshold.
@@ -204,7 +219,7 @@ sub getProteins{
 #Usage
 ############################################
 sub usage{
-    print STDERR "$0 version $version, Copyright (C) 2015 Diego Mauricio Riano Pachon\n";
+    print STDERR "$0 version $version, Copyright (C) 2020 Diego Mauricio Riano Pachon\n";
     print STDERR "$0 comes with ABSOLUTELY NO WARRANTY; for details type `$0 -l'.\n";
     print STDERR "This is free software, and you are welcome to redistribute it under certain conditions;\n";
     print STDERR "type `$0 -l' for details.\n";
@@ -227,7 +242,7 @@ EOF
 sub license{
     print STDERR <<EOF;
 
-Copyright (C) 2020 Diego Mauricio Riaño Pach<C3>
+Copyright (C) 2020 Diego Mauricio Riaño Pachón
 e-mail: diego.riano\@cena.usp.br
 
 This program is free software; you can redistribute it and/or
