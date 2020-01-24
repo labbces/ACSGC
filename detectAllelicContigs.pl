@@ -29,7 +29,8 @@ my $license='';
 my $cdhitIdentity='';
 my $mpsg='';
 my $mngc='';
-my $version='1.2.0';
+my $outputPrefix='';
+my $version='1.3.0';
 
 #######################################
 ##Vars to control data processing
@@ -51,6 +52,7 @@ GetOptions ("gff|g=s"        => \$gffFile,
             "genome|g=s"     => \$genomeFile,
             "mpsg=i"         => \$mpsg,
             "mngc=i"         => \$mngc,
+            "output|o=s"     => \$outputPrefix,
             "help|h|?"       => \$help, 
             "debug|d=i"      => \$debug,
             "license|l"      => \$license)
@@ -89,11 +91,20 @@ if(!$mngc){
  print STDERR "WARNING: You did not especified a Minimum Number of Genes annotated in Contigs (--mngc). This could be any integer. Only contigs with this as many genes will be analysed. We are using 10 as default.\n\n";
  $mngc=10;
 }
+if(!$outputPrefix){
+ print STDERR "\n\tFATAL: You must provide a string that will be use as a prefix to create output files\n\n";
+ &usage;
+ exit 0;
+}
 if(!$clstrFile && !$cdhitIdentity){
  print STDERR "\n\tFATAL: You must either provide a cluster file file with results from runing cd-hit, or provide a protein identity threshold and we will run CD-hit for you\n\n";
+ &usage;
+ exit 0;
 }
 if($clstrFile && $cdhitIdentity){
  print STDERR "\n\tFATAL: You are using both options --cluster and --protIdent, you MUST use only one.\n\n";
+ &usage;
+ exit 0;
 }
 if($clstrFile && !-s $clstrFile){
  print STDERR "\n\tFATAL:  You must provide a cluster file file with results from runing cd-hit on you predicted proteins.\n\n";
@@ -136,8 +147,14 @@ foreach my $cluster(keys %clusters2contigs){
 
 print STDERR "There are ". scalar(keys(%selectedContigs))." contigs with shared gene/protein clusters\n";
 print STDERR "Using $mpsg as the minimum percentage of shared genes between contigs, so that contigs are kepth in the results\n\n";
+print STDERR "Using $mngc as the minimum number of genes annotated in each contig, so that contigs are kepth in the results\n\n";
+
+my $outTblKepth=$outputPrefix.'contigPairs.kepth.tbl';
+my $outTblTrash=$outputPrefix.'contigPairs.trash.tbl';
+
+open KEPTHTBL, ">$outTblKepth";
+
 foreach my $contig1(keys %selectedContigs){
-# my @clustersContigs1=keys %{$contigs2clusters{$contig1}};
  my @clustersContigs1=keys %{$contigs2clusters{$contig1}};
  my %clustersContigs1 = map { $clustersContigs1[$_] => 1 } 0 .. $#clustersContigs1;
  foreach my $contig2(keys %selectedContigs){
@@ -155,10 +172,12 @@ foreach my $contig1(keys %selectedContigs){
   #Selecting pairs of contigs if at least one of the contigs shares at least $mpsg of their genes with the other contig
   #Also, only contigs with at least $mngc annotated genes are kept
   if(($fractionSharedContig1 >=$mpsg || $fractionSharedContig2 >=$mpsg) && (@clustersContigs1 >= $mngc && @clustersContigs2 >= $mngc)){
-   print "$contig1\t".scalar(keys(%{$contigs2clusters{$contig1}}))."\t$contig2\t".scalar(keys(%{$contigs2clusters{$contig2}}))."\t$countShared\t$fractionSharedContig1\t$fractionSharedContig2\n";
+   print KEPTHTBL "$contig1\t".scalar(keys(%{$contigs2clusters{$contig1}}))."\t$contig2\t".scalar(keys(%{$contigs2clusters{$contig2}}))."\t$countShared\t$fractionSharedContig1\t$fractionSharedContig2\n";
   }
  }
 }
+
+close KEPTHTBL;
 
 ############################################
 ##Parse GTF file
