@@ -22,7 +22,7 @@ while(<TBL>){
  if (!-f $fileContig2){
   system("seqret -auto $ARGV[1]:$contig2 $fileContig2")
  }
- system("mashmap -r $fileContig1 -q $fileContig2 --threads 10 --output $mashMapFile -f none > $mashMapFileLOG 2>&1");
+ system("mashmap -r $fileContig1 -q $fileContig2 --threads $ARGV[2] --output $mashMapFile -f none > $mashMapFileLOG 2>&1");
  system("generateDotPlot postscript large $mashMapFile > $dotPlotFileLOG 2>&1");
  if(-f 'out.ps'){
   rename 'out.ps', $dotPlotFilePS;
